@@ -1,3 +1,3 @@
-From google/nodejs-runtime:latest
+From cassandra:latest
 
-EXPOSE 2000/tcp
+EXPOSE 7280/tcp
