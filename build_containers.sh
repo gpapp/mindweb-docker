@@ -3,8 +3,6 @@ COMPONENTS='db broker storage session-manager freeplane-converter ui'
 
 function rebuildComponent () {
         NAME=$1
-	docker stop mw-$NAME-1
-	docker rm mw-$NAME-1
 
 	if [ ! -d $NAME ]; then 
 	  git clone ssh://git@dev.itworks.hu:2022/MindWeb/$NAME.git
@@ -18,14 +16,15 @@ function rebuildComponent () {
 }
 
 echo 'What should I rebuild?'
-echo 'A - All modules'
-echo 'b - Broker'
-echo 'd - db'
-echo 'm - session-manager'
-echo 'u - UI'
-echo 's - storage service (MISSING)'
-echo 'f - converter service (MISSING)'
+echo -e '\tA - All modules'
+echo -e '\tb - Broker'
+echo -e '\td - db'
+echo -e '\tm - session-manager'
+echo -e '\tu - UI'
+echo -e '\ts - storage service (MISSING)'
+echo -e '\tf - converter service (MISSING)'
 read -N1 -p '(Abdmsf)' res
+echo -e '\n'
 
 case $res in
 	'A') COMPONENTS='db session-manager broker ui'
@@ -49,14 +48,26 @@ case $res in
 	    COMPONENTS='freeplane-converter'
 	;;
 	*)
-	    echo ''
-	    echo "Invalid value selected: $res"
+	    echo -e"\n\nInvalid value selected: $res"
 	    exit
 	;;
 esac
+read -N1 -p 'Rebuild (b) or recreate (C)' res
+echo -e '\n'
+
+case $res in 
+  'b')
+      REBUILD='NO'
+  ;;
+  '*')
+      REBUILD=''
+  ;;
+esac
 
 for i in $COMPONENTS; do
-	rebuildComponent $i
+	docker stop mw-$i-1
+	docker rm mw-$i-1
+        if [[ -n $REBUILD ]] ; then rebuildComponent $i; fi
 	case $i in
 	  'db')
              docker create -P --name mw-db-1 mindweb/db
@@ -86,6 +97,7 @@ for i in $COMPONENTS; do
 #	        --link mw-freeplane-converter-1:freeplane-converter \
 	   ;;
 	esac
+        docker start mw-$i-1
 done
 
 
