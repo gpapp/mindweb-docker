@@ -150,10 +150,11 @@ if [ ! $ALL ]; then
     if [ -n "$PUSH" ]; then echo "These projects need commit/push: $PUSH"; fi
     if [ -n "$MERGE" ]; then echo "These projects need merge: $MERGE"; fi
 
-    MODIFIED="${PULL} ${PUSH} ${MERGE}"
 else
     PUSH=$COMPONENTS
 fi
+
+MODIFIED="${PULL} ${PUSH} ${MERGE}"
 
 if [ -n "${PUSH}${MERGE}" ]; then
     read -N1 -p 'Force rebuild? (yN)' res
@@ -182,7 +183,9 @@ fi
 
 # Perform container specific creation
 for i in $MODIFIED; do
-    $i/docker_create.sh
+    cd $i
+    ./docker_create.sh
+    cd -
 done
 
 # Start all components
