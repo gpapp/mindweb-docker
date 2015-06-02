@@ -90,37 +90,83 @@ case $res in
   'b')
       REBUILD='NO'
   ;;
-  '*')
+  *)
       REBUILD=''
   ;;
 esac
 }
 
-COMPONENTS='db session-manager broker ui freeplane-converter'
+while [[ $# > 0 ]]; do
+    key="$1"
 
-for i in $COMPONENTS; do
-    checkForUpdate $i
-    STATUS=$?
-    if [[ $STATUS -eq '0' ]]; then
-	status='OK';
-    elif [[ $STATUS -eq '1' ]]; then
-	status='NEED UPDATE';
-	MODIFIED="${MODIFIED} $i"
-    elif [[ $STATUS == 2 ]]; then
-	status='NEED COMMIT';
-	COMMIT="${COMMIT} $i"
-    elif [[ $STATUS == 3 ]]; then
-	status='DIVERGED';
-	MERGE="${MERGE} $i"
-    fi
-    echo "Checking $i: $status"
+    case $key in
+	-a|--all)
+	    echo "Forcing to rebuild everything"
+	    ALL=true
+	;;
+	-i|--interactive)
+	    echo "Entering interactive mode"
+	;;
+	-m|--module)
+	    MODULE="$2"
+	    shift # past argument
+	;;
+	*)
+            # unknown option
+	    echo -e "Valid parameters are:
+    -a|--all: force everything
+    -i|--interactive: Use interactive shell
+    -m|--module: build specific module only (shortcuts from interactive shell)
+"
+	    exit
+	;;
+    esac
+    shift # past argument or value
 done
 
-if [ -n "$MODIFIED" ]; then echo "These projects need pull/clone: $MODIFIED"; fi
-if [ -n "$COMMIT" ]; then echo "These projects need commit/push: $COMMIT"; fi
-if [ -n "$MERGE" ]; then echo "These projects need merge: $MERGE"; fi
-if [ -n "$COMMIT $MERGE" ]; then
-    exit
+
+COMPONENTS='db session-manager broker ui freeplane-converter'
+
+if [ ! $ALL ]; then 
+    for i in $COMPONENTS; do
+	checkForUpdate $i
+	STATUS=$?
+	if [[ $STATUS -eq '0' ]]; then
+	    status='OK';
+	elif [[ $STATUS -eq '1' ]]; then
+	    status='NEED UPDATE';
+	    PULL="${PULL} $i"
+	elif [[ $STATUS == 2 ]]; then
+	    status='NEED COMMIT';
+	    PUSH="${PUSH} $i"
+	elif [[ $STATUS == 3 ]]; then
+	    status='DIVERGED';
+	    MERGE="${MERGE} $i"
+	fi
+	echo "Checking $i: $status"
+    done
+
+    if [ -n "$PULL" ]; then echo "These projects need pull/clone: $PULL"; fi
+    if [ -n "$PUSH" ]; then echo "These projects need commit/push: $PUSH"; fi
+    if [ -n "$MERGE" ]; then echo "These projects need merge: $MERGE"; fi
+
+    MODIFIED="${PULL} ${PUSH} ${MERGE}"
+else
+    PUSH=$COMPONENTS
+fi
+
+if [ -n "${PUSH}${MERGE}" ]; then
+    read -N1 -p 'Force rebuild? (yN)' res
+    echo -e '\n'
+
+    case $res in
+	'y')
+	    REBUILD='YES'
+	;;
+	*)
+	    exit
+	;;
+    esac
 fi
 
 # Remove all modified components
@@ -136,7 +182,7 @@ fi
 
 # Perform container specific creation
 for i in $MODIFIED; do
-    $i/createDocker.sh
+    $i/docker_create.sh
 done
 
 # Start all components
