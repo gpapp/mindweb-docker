@@ -1,6 +1,35 @@
 #!/bin/bash
 COMPONENTS='db broker storage session-manager freeplane-converter ui'
 
+function checkForUpdate () {
+#	set -x
+	NAME=$1
+	if [ ! -d $NAME ]; then 
+	    RETVAL=1;
+        else
+	    cd $NAME
+	    if `git status -uall |grep 'nothing to commit' >/dev/null`; then
+		LOCAL=$(git rev-parse @)
+		REMOTE=$(git rev-parse @{u})
+		BASE=$(git merge-base @ @{u})
+
+		if [ $LOCAL = $REMOTE ]; then
+		    RETVAL=0;
+		elif [ $LOCAL = $BASE ]; then
+		    RETVAL=1;
+		elif [ $REMOTE = $BASE ]; then
+		    RETVAL=2;
+		else
+		    RETVAL=3;
+		fi
+	    else
+		RETVAL=2;
+	    fi
+	    cd ..
+	fi
+	return $RETVAL
+}
+
 function rebuildComponent () {
         NAME=$1
 
@@ -15,6 +44,8 @@ function rebuildComponent () {
 	docker build -t mindweb/$NAME $NAME
 }
 
+# Moved interactive part here for later use
+function interactive () {
 echo 'What should I rebuild?'
 echo -e '\tA - All modules'
 echo -e '\tb - Broker'
@@ -63,42 +94,53 @@ case $res in
       REBUILD=''
   ;;
 esac
+}
+
+COMPONENTS='db session-manager broker ui freeplane-converter'
 
 for i in $COMPONENTS; do
-	docker stop mw-$i-1
-	docker rm mw-$i-1
-        if [[ -n $REBUILD ]] ; then rebuildComponent $i; fi
-	case $i in
-	  'db')
-             docker create -P --name mw-db-1 mindweb/db
-          ;;
-	  'session-manager')
-	    docker create -P --name mw-session-manager-1 \
-	      --link mw-db-1:db \
-	      mindweb/session-manager
-	  ;;
-	  'ui')
-	    docker create -P --name mw-ui-1 \
-              --link mw-broker-1:broker \
-              mindweb/ui
-	  ;;
-	  'storage')
-	    docker create -P --name mw-storage-1 --link mw-db-1:db mindweb/storage
-	  ;;
-	  'freeplane-converter')
-            docker create -P --name mw-freeplane-converter-1 mindweb/freeplane-converter
-	  ;;
-	  'broker')
-	    docker create -P -p 192.168.1.20:8080:8080 --name mw-broker-1 \
-	        --link mw-session-manager-1:session-manager \
-	        --link mw-ui-1:ui \
-	        mindweb/broker
-#	        --link mw-storage-1:storage \
-#	        --link mw-freeplane-converter-1:freeplane-converter \
-	   ;;
-	esac
-        docker start mw-$i-1
+    checkForUpdate $i
+    STATUS=$?
+    if [[ $STATUS -eq '0' ]]; then
+	status='OK';
+    elif [[ $STATUS -eq '1' ]]; then
+	status='NEED UPDATE';
+	MODIFIED="${MODIFIED} $i"
+    elif [[ $STATUS == 2 ]]; then
+	status='NEED COMMIT';
+	COMMIT="${COMMIT} $i"
+    elif [[ $STATUS == 3 ]]; then
+	status='DIVERGED';
+	MERGE="${MERGE} $i"
+    fi
+    echo "Checking $i: $status"
 done
 
+if [ -n "$MODIFIED" ]; then echo "These projects need pull/clone: $MODIFIED"; fi
+if [ -n "$COMMIT" ]; then echo "These projects need commit/push: $COMMIT"; fi
+if [ -n "$MERGE" ]; then echo "These projects need merge: $MERGE"; fi
+if [ -n "$COMMIT $MERGE" ]; then
+    exit
+fi
 
+# Remove all modified components
+for i in $MODIFIED; do
+	docker stop mw-$i-1
+	docker rm mw-$i-1
+done
+
+# Rebuild components if needed
+if [[ -n $MODIFIED ]] ; then
+	for i in $MODIFIED; do rebuildComponent $i;  done
+fi
+
+# Perform container specific creation
+for i in $MODIFIED; do
+    $i/createDocker.sh
+done
+
+# Start all components
+for i in $MODIFIED; do
+	docker start mw-$i-1
+done
 
