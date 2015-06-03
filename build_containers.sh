@@ -1,5 +1,5 @@
 #!/bin/bash
-COMPONENTS='db broker storage session-manager freeplane-converter ui'
+COMPONENTS='db storage session-manager freeplane-converter ui broker'
 
 function checkForUpdate () {
 #	set -x
@@ -44,56 +44,50 @@ function rebuildComponent () {
 	docker build -t mindweb/$NAME $NAME
 }
 
+function resolve_module () {
+    res=$1
+    case $res in
+    	'A') echo 'db session-manager broker ui'
+    	;;
+    	'b')
+    	    echo 'broker'
+    	;;
+    	'd')
+    	    echo 'db'
+    	;;
+    	'm')
+    	    echo 'session-manager'
+    	;;
+    	'u')
+    	    echo 'ui'
+    	;;
+    	's')
+    	    echo 'storage'
+    	;;
+    	'f')
+    	    echo 'freeplane-converter'
+    	;;
+    	*)
+    	    echo -e "\n\nInvalid value selected: $res"
+    	    return 1
+    	;;
+    esac
+    return 0
+}
+
 # Moved interactive part here for later use
 function interactive () {
-echo 'What should I rebuild?'
-echo -e '\tA - All modules'
-echo -e '\tb - Broker'
-echo -e '\td - db'
-echo -e '\tm - session-manager'
-echo -e '\tu - UI'
-echo -e '\ts - storage service (MISSING)'
-echo -e '\tf - converter service (MISSING)'
-read -N1 -p '(Abdmsf)' res
-echo -e '\n'
-
-case $res in
-	'A') COMPONENTS='db session-manager broker ui'
-	;;
-	'b')
-	    COMPONENTS='broker'
-	;;
-	'd')
-	    COMPONENTS='db'
-	;;
-	'm')
-	    COMPONENTS='session-manager'
-	;;
-	'u')
-	    COMPONENTS='ui'
-	;;
-	's')
-	    COMPONENTS='storage'
-	;;
-	'f')
-	    COMPONENTS='freeplane-converter'
-	;;
-	*)
-	    echo -e"\n\nInvalid value selected: $res"
-	    exit
-	;;
-esac
-read -N1 -p 'Rebuild (b) or recreate (C)' res
-echo -e '\n'
-
-case $res in 
-  'b')
-      REBUILD='NO'
-  ;;
-  *)
-      REBUILD=''
-  ;;
-esac
+    read -N1 -p 'Rebuild (b) or recreate (C)' res
+    echo -e '\n'
+    
+    case $res in 
+      'b')
+          REBUILD='NO'
+      ;;
+      *)
+          REBUILD=''
+      ;;
+    esac
 }
 
 while [[ $# > 0 ]]; do
@@ -102,10 +96,13 @@ while [[ $# > 0 ]]; do
     case $key in
 	-a|--all)
 	    echo "Forcing to rebuild everything"
-	    ALL=true
+	    MANUAL=1
+        PUSH=$COMPONENTS
 	;;
 	-i|--interactive)
 	    echo "Entering interactive mode"
+	    MANUAL=1
+	    INTERACTIVE=1
 	;;
 	-m|--module)
 	    MODULE="$2"
@@ -124,49 +121,57 @@ while [[ $# > 0 ]]; do
     shift # past argument or value
 done
 
-
-COMPONENTS='db session-manager broker ui freeplane-converter'
-
-if [ ! $ALL ]; then 
+if [ ! $MANUAL ]; then 
     for i in $COMPONENTS; do
-	checkForUpdate $i
-	STATUS=$?
-	if [[ $STATUS -eq '0' ]]; then
-	    status='OK';
-	elif [[ $STATUS -eq '1' ]]; then
-	    status='NEED UPDATE';
-	    PULL="${PULL} $i"
-	elif [[ $STATUS == 2 ]]; then
-	    status='NEED COMMIT';
-	    PUSH="${PUSH} $i"
-	elif [[ $STATUS == 3 ]]; then
-	    status='DIVERGED';
-	    MERGE="${MERGE} $i"
-	fi
-	echo "Checking $i: $status"
+    	checkForUpdate $i
+    	STATUS=$?
+    	if [[ $STATUS -eq '0' ]]; then
+    	    status='OK';
+    	elif [[ $STATUS -eq '1' ]]; then
+    	    status='NEED UPDATE';
+    	    PULL="${PULL} $i"
+    	elif [[ $STATUS == 2 ]]; then
+    	    status='NEED COMMIT';
+    	    PUSH="${PUSH} $i"
+    	elif [[ $STATUS == 3 ]]; then
+    	    status='DIVERGED';
+    	    MERGE="${MERGE} $i"
+    	fi
+    	echo "Checking $i: $status"
     done
 
     if [ -n "$PULL" ]; then echo "These projects need pull/clone: $PULL"; fi
     if [ -n "$PUSH" ]; then echo "These projects need commit/push: $PUSH"; fi
     if [ -n "$MERGE" ]; then echo "These projects need merge: $MERGE"; fi
+fi
+if [ $INTERACTIVE ]; then
+    echo 'What should I rebuild?'
+    echo -e '\tA - All modules'
+    echo -e '\tb - Broker'
+    echo -e '\td - db'
+    echo -e '\tm - session-manager'
+    echo -e '\tu - UI'
+    echo -e '\ts - storage service (MISSING)'
+    echo -e '\tf - converter service (MISSING)'
+    read -N1 -p '(Abdmsf)' res
+    echo -e '\n'
 
-else
-    PUSH=$COMPONENTS
+    PUSH=$(resolve_module $res)
+    if [[ $? == 1 ]]; then
+        echo $PULL
+        exit
+    fi 
 fi
 
 MODIFIED="${PULL} ${PUSH} ${MERGE}"
-
+set -x
 if [ -n "${PUSH}${MERGE}" ]; then
     read -N1 -p 'Force rebuild? (yN)' res
     echo -e '\n'
 
     case $res in
-	'y')
-	    REBUILD='YES'
-	;;
-	*)
-	    exit
-	;;
+    	'y') REBUILD='YES' ;;
+    	*)   exit; ;;
     esac
 fi
 
