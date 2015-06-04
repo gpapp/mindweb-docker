@@ -2,16 +2,16 @@
 COMPONENTS='db storage session-manager freeplane-converter ui broker'
 
 function checkForUpdate () {
-#	set -x
 	NAME=$1
 	if [ ! -d $NAME ]; then 
 	    RETVAL=1;
         else
 	    cd $NAME
+	    git remote update >/dev/null
 	    if `git status -uall |grep 'nothing to commit' >/dev/null`; then
 		LOCAL=$(git rev-parse @)
-		REMOTE=$(git rev-parse @{u})
-		BASE=$(git merge-base @ @{u})
+		REMOTE=$(git rev-parse origin/master)
+		BASE=$(git merge-base @ origin/master)
 
 		if [ $LOCAL = $REMOTE ]; then
 		    RETVAL=0;
@@ -164,7 +164,7 @@ if [ $INTERACTIVE ]; then
 fi
 
 MODIFIED="${PULL} ${PUSH} ${MERGE}"
-set -x
+
 if [ -n "${PUSH}${MERGE}" ]; then
     read -N1 -p 'Force rebuild? (yN)' res
     echo -e '\n'
