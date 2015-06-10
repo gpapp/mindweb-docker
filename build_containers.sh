@@ -170,8 +170,8 @@ if [ -n "${PUSH}${MERGE}" ]; then
     echo -e '\n'
 
     case $res in
-    	'y') REBUILD='YES' ;;
-    	*)   exit; ;;
+    	'y') REBUILD=$MODIFIED ;;
+    	*)   REBUILD=''; ;;
     esac
 fi
 
@@ -182,9 +182,7 @@ for i in $MODIFIED; do
 done
 
 # Rebuild components if needed
-if [[ -n $MODIFIED ]] ; then
-	for i in $MODIFIED; do rebuildComponent $i;  done
-fi
+for i in $REBUILD; do rebuildComponent $i;  done
 
 # Perform container specific creation
 for i in $MODIFIED; do

@@ -3,6 +3,7 @@
 
 docker create -P --name mw-db-1 mindweb/db
 
+exit
 echo "Starting db and trying to connect to it"
 docker start mw-db-1
 
