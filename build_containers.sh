@@ -1,5 +1,5 @@
 #!/bin/bash
-COMPONENTS='db storage session-manager freeplane-converter ui broker'
+COMPONENTS='storage session-manager freeplane-converter ui broker'
 
 function checkForUpdate () {
 	NAME=$1
@@ -47,7 +47,7 @@ function rebuildComponent () {
 function resolve_module () {
     res=$1
     case $res in
-    	'A') echo 'db session-manager broker ui'
+    	'A') echo $COMPONENTS
     	;;
     	'b')
     	    echo 'broker'
