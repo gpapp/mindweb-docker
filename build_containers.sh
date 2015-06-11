@@ -75,21 +75,6 @@ function resolve_module () {
     return 0
 }
 
-# Moved interactive part here for later use
-function interactive () {
-    read -N1 -p 'Rebuild (b) or recreate (C)' res
-    echo -e '\n'
-    
-    case $res in 
-      'b')
-          REBUILD='NO'
-      ;;
-      *)
-          REBUILD=''
-      ;;
-    esac
-}
-
 while [[ $# > 0 ]]; do
     key="$1"
 
@@ -105,7 +90,12 @@ while [[ $# > 0 ]]; do
 	    INTERACTIVE=1
 	;;
 	-m|--module)
-	    MODULE="$2"
+	    MANUAL=1
+    	    PUSH=$(resolve_module $2)
+	    if [[ $? == 1 ]]; then
+	        echo $PUSH
+	        exit
+	    fi
 	    shift # past argument
 	;;
 	*)
@@ -143,6 +133,7 @@ if [ ! $MANUAL ]; then
     if [ -n "$PULL" ]; then echo "These projects need pull/clone: $PULL"; fi
     if [ -n "$PUSH" ]; then echo "These projects need commit/push: $PUSH"; fi
     if [ -n "$MERGE" ]; then echo "These projects need merge: $MERGE"; fi
+    REBUILD=$PULL
 fi
 if [ $INTERACTIVE ]; then
     echo 'What should I rebuild?'
@@ -158,7 +149,7 @@ if [ $INTERACTIVE ]; then
 
     PUSH=$(resolve_module $res)
     if [[ $? == 1 ]]; then
-        echo $PULL
+        echo $PUSH
         exit
     fi 
 fi
