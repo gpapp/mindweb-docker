@@ -30,6 +30,24 @@ function checkForUpdate () {
 	return $RETVAL
 }
 
+function findDependents () {
+	local C=$1
+	for i in $COMPONENTS; do 
+		if [[ $C != $i ]]; then 
+			for j in $(cat $i/docker_create.sh|sed -nr '/--link/ { s/.*\-\-link mw-(.*)-1:.*/\1/; p}'); do
+				if [[ $C == $j ]]; then 
+					echo "$C ==> $i" >&2
+					local LEAFS=$(findDependents "$i")
+			fi
+			done
+		fi
+	done
+	for i in $LEAFS; do
+		LEAFS=$(echo $LEAFS|sed -rn "s/$i//g; s/(.*)/\1 $i/;p")
+	done
+	echo -n "$C $LEAFS"
+}
+
 function rebuildComponent () {
         NAME=$1
 
@@ -166,8 +184,17 @@ if [ -n "${PUSH}${MERGE}" ]; then
     esac
 fi
 
-# Remove all modified components
+DEP_CHAIN=""
 for i in $MODIFIED; do
+	DEP_CHAIN="$DEP_CHAIN $(findDependents $i)"
+done
+for i in $DEP_CHAIN; do
+	DEP_CHAIN=$(echo $DEP_CHAIN|sed -rn "s/$i//g; s/(.*)/\1 $i/;p")
+done
+echo "Dependencies to recreate:"$DEP_CHAIN
+
+# Remove all modified components
+for i in $DEP_CHAIN; do
 	docker stop mw-$i-1
 	docker rm mw-$i-1
 done
@@ -176,14 +203,14 @@ done
 for i in $REBUILD; do rebuildComponent $i;  done
 
 # Perform container specific creation
-for i in $MODIFIED; do
+for i in $DEP_CHAIN; do
     cd $i
     ./docker_create.sh
     cd -
 done
 
 # Start all components
-for i in $MODIFIED; do
+for i in $DEP_CHAIN; do
 	docker start mw-$i-1
 done
 
