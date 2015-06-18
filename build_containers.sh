@@ -34,7 +34,7 @@ function findDependents () {
 	local C=$1
 	for i in $COMPONENTS; do 
 		if [[ $C != $i ]]; then 
-			for j in $(cat $i/docker_create.sh|sed -nr '/--link/ { s/.*\-\-link mw-(.*)-1:.*/\1/; p}'); do
+			for j in $(cat $i/docker_create.sh|sed -nr '/--link/ { s/.*\-\-link mw-(.*)-\$TYPE:.*/\1/; p}'); do
 				if [[ $C == $j ]]; then 
 					echo "$C ==> $i" >&2
 					local LEAFS=$(findDependents "$i")
@@ -93,6 +93,9 @@ function resolve_module () {
     return 0
 }
 
+TYPE='DEV'
+BROKER_PORT='8081'
+export TYPE BROKER_PORT
 while [[ $# > 0 ]]; do
     key="$1"
 
@@ -106,6 +109,14 @@ while [[ $# > 0 ]]; do
 	    echo "Entering interactive mode"
 	    MANUAL=1
 	    INTERACTIVE=1
+	;;
+	-t|--type)
+	    TYPE="$2"
+	    shift
+	;;
+	-b|--broker-port)
+	    BROKER_PORT="$2"
+	    shift
 	;;
 	-m|--module)
 	    MANUAL=1
@@ -121,6 +132,8 @@ while [[ $# > 0 ]]; do
 	    echo -e "Valid parameters are:
     -a|--all: force everything
     -i|--interactive: Use interactive shell
+    -t|--type:   Type of build (defaults to dev)
+    -b|--broker-port: The port for the broker to listen to (defaults to 8081)
     -m|--module: build specific module only (shortcuts from interactive shell)
 "
 	    exit
@@ -195,8 +208,10 @@ echo "Dependencies to recreate:"$DEP_CHAIN
 
 # Remove all modified components
 for i in $DEP_CHAIN; do
-	docker stop mw-$i-1
-	docker rm mw-$i-1
+	echo "Stopping container:" $i
+	docker stop mw-$i-$TYPE >/dev/null
+	echo "Removing container:" $i
+	docker rm mw-$i-$TYPE >/dev/null
 done
 
 # Rebuild components if needed
@@ -204,13 +219,15 @@ for i in $REBUILD; do rebuildComponent $i;  done
 
 # Perform container specific creation
 for i in $DEP_CHAIN; do
+    echo Creating container $i
     cd $i
-    ./docker_create.sh
+    ./docker_create.sh >/dev/null
     cd -
 done
 
 # Start all components
 for i in $DEP_CHAIN; do
-	docker start mw-$i-1
+	echo "Starting container:" $i
+	docker start mw-$i-$TYPE >/dev/null
 done
 
