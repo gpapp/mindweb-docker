@@ -1,3 +1,3 @@
 From google/nodejs-runtime:latest
 
-EXPOSE 2000
+EXPOSE 2004
