@@ -1,0 +1,18 @@
+{
+    "name": "mindweb-session-manager",
+    "version": "0.0.1",
+    "description": "Session and authentication manager service for MindWeb",
+    "main": "web.js",
+    "private": true,
+    "scripts": {
+        "start": "node ./web.js",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "dependencies": {
+        "express": "~4.1.x",
+        "morgan": "~1.5.x",
+        "multer": "~0.1.x",
+        "form-data": "0.x.x",
+        "async": "~1.2.x"
+    }
+}
