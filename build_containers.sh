@@ -1,5 +1,5 @@
 #!/bin/bash
-COMPONENTS='storage session-manager freeplane-converter ui broker'
+COMPONENTS='storage session-manager file freeplane-converter ui broker'
 
 function checkForUpdate () {
 	NAME=$1
@@ -58,7 +58,6 @@ function rebuildComponent () {
           git pull
           cd ..
         fi
-	docker rmi mindweb/$NAME
 	docker build -t mindweb/$NAME $NAME
 }
 
@@ -82,8 +81,11 @@ function resolve_module () {
     	's')
     	    echo 'storage'
     	;;
-    	'f')
+    	'F')
     	    echo 'freeplane-converter'
+    	;;
+    	'f')
+    	    echo 'file'
     	;;
     	*)
     	    echo -e "\n\nInvalid value selected: $res"
@@ -95,7 +97,8 @@ function resolve_module () {
 
 TYPE='DEV'
 BROKER_PORT='8081'
-export TYPE BROKER_PORT
+export TYPE
+export BROKER_PORT
 while [[ $# > 0 ]]; do
     key="$1"
 
@@ -231,3 +234,5 @@ for i in $DEP_CHAIN; do
 	docker start mw-$i-$TYPE >/dev/null
 done
 
+echo "Cleaning up untaged images"
+docker rmi $(docker images|awk '{if (/^<none>/) {print $3}}')
