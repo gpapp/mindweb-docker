@@ -3,10 +3,5 @@
   "storage": {
     "host": "${STORAGE_PORT_2001_TCP_ADDR}",
     "port": "${STORAGE_PORT_2001_TCP_PORT}"
-  },
-  "converter": {
-    "host": "${FREEPLANE_CONVERTER_PORT_2002_TCP_ADDR}",
-    "port": "${FREEPLANE_CONVERTER_PORT_2002_TCP_PORT}",
-    "path": "/mindweb/Converter.groovlet"
   }
 }

@@ -1,27 +1,24 @@
 var express = require('express'),
     http = require('http'),
+    jade = require('jade'),
     async = require('async'),
-    logger = require('morgan')
+    path = require('path'),
+    logger = require('morgan'),
     fs = require('fs'),
     multer = require('multer'),
-    FormData = require("form-data");
+    FormData = require("form-data"),
+    FileConverter = require ('./modules/FreeplaneConverter');
 
-
-var rawConfig = fs.readFileSync(process.env['DEV'] ? 'config/config.json.leaf' : 'config/config.json');
-var config = rawConfig.toString();
-for (key in process.env) {
-    var re = new RegExp('\\$\\{' + key + '\\}', 'g');
-    config = config.replace(re, process.env[key]);
-}
-
-var options = JSON.parse(config);
+var options = processConfig();
 
 var app = express();
 
 var user;
 
-app
-.use(multer({
+app.set('views', path.join(__dirname, 'views'));
+app.set('view engine', 'jade');
+
+app.use(multer({
     inMemory: true
 }))
 .get('/files', ensureAuthenticated, function(request, response) {
@@ -41,9 +38,10 @@ app
             });
 
         }).on('error', function (error) {
-            response.statusCode='500';
-            response.write(error);
+            response.statusCode = 500;
+            response.write(error.message);
             response.end();
+            return;
         });
         req.end();
     })
@@ -68,10 +66,6 @@ app
                 }
             },
             function(next) {
-                var cleanupContent = JSON.parse(retval.result.content);
-                renameChildrenToNodes(cleanupContent);
-                buildMarkdownContent(cleanupContent);
-                retval.result.content=JSON.stringify(cleanupContent);
                 response.json(retval.result);
                 response.end();
             }],
@@ -99,35 +93,9 @@ app
                     async.series([
                         function (next2) {
                             try {
-                                var form = new FormData();
-                                form.append('file', file.buffer);
-
-                                var req_options = {
-                                    method: 'POST',
-                                    host: options.converter.host,
-                                    port: options.converter.port,
-                                    path: options.converter.path,
-                                    headers: form.getHeaders()
-                                };
-                                var conv_req = http.request(req_options, function (conv_response) {
-                                    var parts = [];
-
-                                    conv_response.on('data', function (chunk) {
-                                        parts.push(chunk);
-                                    });
-
-                                    conv_response.on('end', function () {
-                                        retval.rawmap = JSON.parse(Buffer.concat(parts));
-                                        next2();
-                                    })
-                                })
-                                    .on('error', function (error) {
-                                        next2(error);
-                                    });
-                                form.pipe(conv_req);
-                                conv_req.end();
+                                FileConverter.convert(file.buffer, retval, next2);
                             } catch (error) {
-                                next(error);
+                                next2(error);
                             }
                         },
                         function (next2) {
@@ -162,7 +130,7 @@ app
                                 form.pipe(store_req);
                                 store_req.end();
                             } catch (error) {
-                                next(error);
+                                next2(error);
                             }
                         }
                     ], function(error) {
@@ -172,8 +140,8 @@ app
             },
             function (err) {
                 if (err) {
-                    response.statusCode = 500;
-                    response.json(err);
+                    response.status(500);
+                    response.render('error', { error: err });
                 } else {
                     response.json(retval);
                 }
@@ -181,11 +149,27 @@ app
             }
         );
     })
+    .use(
+        function errorHandler(err, req, res, next) {
+            res.status(500);
+            res.render('error', { error: err });
+    })
 ;
 
 app.listen(options.port, function() {
     console.log("Listening on " + options.port);
 });
+
+
+function processConfig() {
+    var rawConfig = fs.readFileSync(process.env['development'] ? 'config/config.local.json' : 'config/config.json');
+    var config = rawConfig.toString();
+    for (key in process.env) {
+        var re = new RegExp('\\$\\{' + key + '\\}', 'g');
+        config = config.replace(re, process.env[key]);
+    }
+    return JSON.parse(config);;
+}
 
 // Simple route middleware to ensure user is authenticated.
 //   Use this route middleware on any resource that needs to be protected.  If
@@ -197,7 +181,7 @@ function ensureAuthenticated(req, res, next) {
         user = JSON.parse(req.headers.mindweb_user);
         return next();
     }
-    res.statusCode = 401;
+    res.status(401);
     res.statusMessage='The user has no authentication information';
     res.end();
 }
@@ -259,55 +243,3 @@ function getFileVersion (fileVersionId, retval, completed) {
     req.end();
 }
 
-function renameChildrenToNodes(node) {
-    if (node.children && typeof node.children != "function") {
-        node.nodes = node.children;
-        delete node.children;
-        for (var i = 0, tot = node.nodes.length; i < tot; i++) {
-            renameChildrenToNodes(node.nodes[i]);
-        }
-    }
-}
-
-var urlPattern = /(^|[\s\n]|<br\/?>)((?:https?|ftp):\/\/[\-A-Z0-9+\u0026\u2019@#\/%?=()~_|!:,.;]*[\-A-Z0-9+\u0026@#\/%=~()_|])/gi;
-function buildMarkdownContent(node){
-    if(node.attributes) {
-        node.nodeMarkdown = node.attributes.TEXT;
-    }
-    if (node.nodes){
-        node.nodes.forEach(function(n) {
-            node.detailMarkdown = markdown;
-            node.noteMarkdown = markdown;
-            if(n.name === 'richcontent') {
-                var markdown = buildMarkdownContentForNode(n.nodes);
-                if (n.attributes.TYPE === 'NODE') {
-                    node.nodeMarkdown = markdown;
-                }
-                else if (n.attributes.TYPE === 'DETAILS') {
-                    node.detailMarkdown = markdown;
-                }
-                else if (n.attributes.TYPE === 'NOTE') {
-                    node.noteMarkdown = markdown;
-                }
-            } else {
-                buildMarkdownContent(n);
-            }
-        });
-    }
-}
-
-function buildMarkdownContentForNode(nodes){
-    var retval = '';
-    nodes.forEach(function(n) {
-        if(n.name === 'p') {
-            if (n.value) {
-                retval += n.value.trim().replace(urlPattern, '$1[$2]($2)');
-            }
-            retval += '\n\n';
-        }
-        if (n.nodes) {
-            retval += buildMarkdownContentForNode(n.nodes);
-        }
-    });
-    return retval;
-}
