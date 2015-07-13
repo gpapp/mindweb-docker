@@ -2,5 +2,5 @@ broker
 session-manager
 storage
 ui
-freeplane-converter
+file
 .config

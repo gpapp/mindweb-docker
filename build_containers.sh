@@ -1,5 +1,5 @@
 #!/bin/bash
-COMPONENTS='storage session-manager file freeplane-converter ui broker'
+COMPONENTS='storage session-manager file ui broker'
 
 function checkForUpdate () {
 	NAME=$1
@@ -66,11 +66,11 @@ function resolve_module () {
     case $res in
     	'A') echo $COMPONENTS
     	;;
+    	'n')
+    	    echo 'nodejs-base'
+    	;;
     	'b')
     	    echo 'broker'
-    	;;
-    	'd')
-    	    echo 'db'
     	;;
     	'm')
     	    echo 'session-manager'
@@ -80,9 +80,6 @@ function resolve_module () {
     	;;
     	's')
     	    echo 'storage'
-    	;;
-    	'F')
-    	    echo 'freeplane-converter'
     	;;
     	'f')
     	    echo 'file'
@@ -107,6 +104,18 @@ while [[ $# > 0 ]]; do
 	    echo "Forcing to rebuild everything"
 	    MANUAL=1
         PUSH=$COMPONENTS
+	;;
+	--init-docker)
+	    echo "Initializing docker images"
+	    docker rmi -f mindweb/nodejs-base
+	    docker build -t mindweb/nodejs-base nodejs-base 
+	    docker rmi -f mindweb/webserver-base
+	    docker build -t mindweb/webserver-base webserver-base
+	    exit
+	;;
+	--init-db)
+	    echo "Initializing db"
+	    INITDB=1
 	;;
 	-i|--interactive)
 	    echo "Entering interactive mode"
@@ -144,6 +153,11 @@ while [[ $# > 0 ]]; do
     esac
     shift # past argument or value
 done
+
+if [ $INITDB ]; then
+    MANUAL=1
+    PUSH='db'
+fi
 
 if [ ! $MANUAL ]; then 
     for i in $COMPONENTS; do
@@ -235,4 +249,7 @@ for i in $DEP_CHAIN; do
 done
 
 echo "Cleaning up untaged images"
-docker rmi $(docker images|awk '{if (/^<none>/) {print $3}}')
+UNTAGED=$(docker images|awk '{if (/^<none>/) {print $3}}')
+if [ -n "$UNTAGED" ]; then
+    docker rmi $UNTAGED
+fi
