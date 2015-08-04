@@ -1,12 +1,12 @@
 var parseString = require('xml2js').parseString;
 
-module.exports = FreeplaneConverter;
+module.exports = FreeplaneConverterService;
 
-function FreeplaneConverter() {
+function FreeplaneConverterService() {
 
 }
 
-FreeplaneConverter.convert = function (buffer, retval, callback) {
+FreeplaneConverterService.convert = function (buffer, retval, callback) {
     // XML to JSON
     parseString(buffer.toString(), {trim: true}, function (err, result) {
         if (err) {
@@ -20,38 +20,40 @@ FreeplaneConverter.convert = function (buffer, retval, callback) {
         retval.rawmap = result;
         callback();
     })
-}
+};
 
 var urlPattern = /(^|[\s\n]|<br\/?>)((?:https?|ftp):\/\/[\-A-Z0-9+\u0026\u2019@#\/%?=()~_|!:,.;]*[\-A-Z0-9+\u0026@#\/%=~()_|])/gi;
 function buildMarkdownContent(node) {
     if (node.$ && node.$['TEXT']) {
         node.nodeMarkdown = node.$['TEXT'];
     }
+    if (node.richcontent) {
+        for (var i = 0, len = node.richcontent.length; i < len; i++) {
+            var richNode = node.richcontent[i];
+            var markdown = buildMarkdownContentForNode(richNode, null, '');
+            switch (richNode.$['TYPE']) {
+                case 'NODE':
+                    node.nodeMarkdown = markdown;
+                    break;
+                case 'DETAILS':
+                    node.detailMarkdown = markdown;
+                    node.detailOpen = richNode.$['HIDDEN'] != 'true';
+                    break;
+                case 'NOTE':
+                    node.noteMarkdown = markdown;
+                    break;
+                default:
+                    log.warn("Unknown richcontent type:" + richNode.$['TYPE']);
+            }
+        }
+        delete node.richcontent;
+    }
     for (var attr in node) {
         if (!node.hasOwnProperty(attr) || attr === '$') {
             continue;
         }
-        if (attr === 'nodeMarkdown' || attr === 'detailMarkdown' || attr === 'noteMarkdown') {
-            continue;
-        } else if (attr === 'richcontent') {
-            for (var i = 0, len = node[attr].length; i < len; i++) {
-                var richNode = node[attr][i];
-                var markdown = buildMarkdownContentForNode(richNode, null, '');
-                switch (richNode.$['TYPE']) {
-                    case 'NODE':
-                        richNode.nodeMarkdown = markdown;
-                        break;
-                    case 'DETAILS':
-                        richNode.detailMarkdown = markdown;
-                        richNode.detailOpen = richNode.$['HIDDEN'] != 'true';
-                        break;
-                    case 'NOTE':
-                        richNode.noteMarkdown = markdown;
-                        break;
-                    default:
-                        log.warn("Unknown richcontent type:" + richNode.$['TYPE']);
-                }
-            }
+        if (attr === 'nodeMarkdown' || attr === 'detailMarkdown' || attr === 'noteMarkdown' || attr === 'richcontent') {
+
         } else if (Array.isArray(node[attr])) {
             for (var i = 0, len = node[attr].length; i < len; i++) {
                 buildMarkdownContent(node[attr][i]);
@@ -123,10 +125,10 @@ function buildMarkdownContentForNode(node, listType, listPrefix) {
             }
             // insert nodes
             if (typeof node[n][i] != 'object') {
-                retval+= node[n][i].trim().replace(urlPattern, '$1[$2]($2)');
+                retval += node[n][i].trim().replace(urlPattern, '$1[$2]($2)');
             } else {
                 if (node._) {
-                    retval+=node._.trim().replace(urlPattern, '$1[$2]($2)')+'\n';
+                    retval += node._.trim().replace(urlPattern, '$1[$2]($2)') + '\n';
                 }
                 retval += buildMarkdownContentForNode(node[n][i], newListType, newListPrefix);
             }

@@ -10,11 +10,12 @@
   },
   "dependencies": {
     "async": "~1.2.x",
+    "body-parser": "^1.13.3",
     "express": "~4.1.x",
     "form-data": "0.x.x",
     "jade": "~1.9.2",
     "morgan": "~1.5.x",
-    "multer": "~0.1.x",
+    "multer": "~1.0.1",
     "xml2js": "^0.4.9"
   }
 }

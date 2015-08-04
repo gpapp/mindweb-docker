@@ -3,35 +3,36 @@ var express = require('express'),
     jade = require('jade'),
     async = require('async'),
     path = require('path'),
-    logger = require('morgan'),
     fs = require('fs'),
+    logger = require('morgan'),
     multer = require('multer'),
+    bodyParser = require('body-parser'),
     FormData = require("form-data"),
-    FileConverter = require ('./modules/FreeplaneConverter');
+    FileConverterService = require('./modules/FreeplaneConverterService'),
+    EditorService = require('./modules/EditorService');
 
 var options = processConfig();
 
 var app = express();
-
+var upload = multer({inMemory: true});
 var user;
 
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'jade');
 
-app.use(multer({
-    inMemory: true
-}))
-.get('/files', ensureAuthenticated, function(request, response) {
+app.use(logger('dev'));
+app
+    .get('/files', ensureAuthenticated, function (request, response) {
         var req_options = {
-                                method: 'GET',
-                                host: options.storage.host,
-                                port: options.storage.port,
-                                path: '/files',
-                                headers: request.headers
-                            };
-        var req = http.request(req_options, function(rightResponse) {
+            method: 'GET',
+            host: options.storage.host,
+            port: options.storage.port,
+            path: '/files',
+            headers: request.headers
+        };
+        var req = http.request(req_options, function (rightResponse) {
             rightResponse.on('data', function (chunk) {
-               response.write(chunk);
+                response.write(chunk);
             });
             rightResponse.on('end', function () {
                 response.end();
@@ -41,48 +42,100 @@ app.use(multer({
             response.statusCode = 500;
             response.write(error.message);
             response.end();
-            return;
         });
         req.end();
     })
-    .get('/file/:id', ensureAuthenticated, function(request, response) {
+    .get('/file/:id', ensureAuthenticated, function (request, response) {
         var retval = {};
         async.series(
-            [ function (next) {
-                getFileInfo(request.params.id, retval, next);
-            },
-            function (next) {
-                var fileInfo = retval.result;
-                if (!fileInfo.error &&
-                    (fileInfo.owner === user.id
-                    || user.id in fileInfo.viewers
-                    || user.id in fileInfo.editors
-                    || fileInfo.public === true)) {
-                        getFileVersion(fileInfo.versions[fileInfo.versions.length-1],retval,next);
-                } else if (!fileInfo.error) {
-                    next ({statusCode: 401, message:'Unauthorized'});
-                } else {
-                    next ({statusCode: 500, message: fileInfo.error});
-                }
-            },
-            function(next) {
-                response.json(retval.result);
-                response.end();
-            }],
-            function(error) {
+            [
+                function (next) {
+                    getFileInfo(request.params.id, retval, next);
+                },
+                function (next) {
+                    var fileInfo = retval.result;
+                    if (!fileInfo.error &&
+                        (fileInfo.owner === user.id
+                        || user.id in fileInfo.viewers
+                        || user.id in fileInfo.editors
+                        || fileInfo.public === true)) {
+                        var lastVersionId = fileInfo.versions[fileInfo.versions.length - 1];
+                        retval.id = lastVersionId;
+                        getFileVersion(lastVersionId, retval, next);
+                    } else if (!fileInfo.error) {
+                        next({statusCode: 401, message: 'Unauthorized'});
+                    } else {
+                        next({statusCode: 500, message: fileInfo.error});
+                    }
+                },
+                function (next) {
+                    response.json(retval.result);
+                    response.end();
+                    next();
+                }],
+            function (error) {
                 if (error) {
                     response.statusCode = error.statusCode;
                     response.write(error.message);
                     response.end();
-                    return;
                 }
-
             }
         )
     })
-    .put   ('/change/:id', ensureAuthenticated, function(request, response) {
+    .put('/change/:id', ensureAuthenticated, bodyParser.json(), function (request, response) {
+        var retval = {};
+        var fileId = request.params.id;
+        var fileVersionId;
+        async.series(
+            [
+                function (next) {
+                    getFileInfo(fileId, retval, next);
+                },
+                function (next) {
+                    var fileInfo = retval.result;
+                    if (!fileInfo.error &&
+                        (fileInfo.owner === user.id
+                        || user.id in fileInfo.editors
+                        || fileInfo.public === true)) {
+                        fileVersionId = fileInfo.versions[fileInfo.versions.length - 1];
+                        getFileVersion(fileVersionId, retval, next);
+                    } else if (!fileInfo.error) {
+                        next({statusCode: 401, message: 'Unauthorized'});
+                    } else {
+                        next({statusCode: 500, message: fileInfo.error});
+                    }
+                },
+                function (next) {
+                    var file = JSON.parse(retval.result.content);
+                    async.forEach(
+                        request.body.actions,
+                        function (action, callback) {
+                            EditorService.applyAction(file, action, callback);
+                        },
+                        function (error) {
+                            retval.result.file = file;
+                            next();
+                        }
+                    );
+                },
+                function (next) {
+                    var file = retval.result.file;
+                    saveFileVersion(fileVersionId, file, next);
+                },
+                function (next) {
+                    response.statusCode = 200;
+                    response.end();
+                }],
+            function (error) {
+                if (error) {
+                    response.statusCode = error.statusCode;
+                    response.write(error.message);
+                    response.end();
+                }
+            }
+        )
     })
-    .post('/upload', ensureAuthenticated, function(request, response) {
+    .post('/upload', ensureAuthenticated, upload.array('file', 10), function (request, response) {
         var retval = {};
         async.forEachOf(request.files,
             function (file, fileName, next) {
@@ -91,72 +144,51 @@ app.use(multer({
                 } else {
                     console.log("Received request to store file: " + file.originalname + " length:" + file.size);
                     async.series([
-                        function (next2) {
-                            try {
-                                FileConverter.convert(file.buffer, retval, next2);
-                            } catch (error) {
-                                next2(error);
+                            function (next2) {
+                                try {
+                                    FileConverterService.convert(file.buffer, retval, next2);
+                                } catch (error) {
+                                    next2(error);
+                                }
+                            },
+                            function (next2) {
+                                try {
+                                    uploadFile(file.originalname, retval.rawmap, next2);
+                                }
+                                catch
+                                    (error) {
+                                    next2(error);
+                                }
                             }
-                        },
-                        function (next2) {
-                            try {
-                                var form = new FormData();
-                                form.append('fileName', file.originalname);
-                                form.append('file', JSON.stringify(retval.rawmap));
-
-                                var req_options = {
-                                    method: 'POST',
-                                    host: options.storage.host,
-                                    port: options.storage.port,
-                                    path: '/file/upload',
-                                    headers: form.getHeaders()
-                                };
-                                req_options.headers.mindweb_user=JSON.stringify(user);
-                                var store_req = http.request(req_options, function (conv_response) {
-                                    var parts = [];
-
-                                    conv_response.on('data', function (chunk) {
-                                        parts.push(chunk);
-                                    });
-
-                                    conv_response.on('end', function () {
-                                        retval.rawmap = JSON.parse(Buffer.concat(parts));
-                                        next2();
-                                    })
-                                })
-                                    .on('error', function (error) {
-                                        next2(error);
-                                    });
-                                form.pipe(store_req);
-                                store_req.end();
-                            } catch (error) {
-                                next2(error);
-                            }
+                        ],
+                        function (error) {
+                            next(error);
                         }
-                    ], function(error) {
-                        next(error);
-                    });
+                    )
+                    ;
                 }
             },
             function (err) {
                 if (err) {
                     response.status(500);
-                    response.render('error', { error: err });
+                    response.render('error', {error: err});
                 } else {
-                    response.json(retval);
+                    response.status(200);
                 }
                 response.end();
             }
         );
     })
-    .use(
-        function errorHandler(err, req, res, next) {
-            res.status(500);
-            res.render('error', { error: err });
+    .
+    use(
+    function errorHandler(err, req, res, next) {
+        res.status(500);
+        res.render('error', {error: err});
+        next();
     })
 ;
 
-app.listen(options.port, function() {
+app.listen(options.port, function () {
     console.log("Listening on " + options.port);
 });
 
@@ -165,10 +197,13 @@ function processConfig() {
     var rawConfig = fs.readFileSync(process.env['development'] ? 'config/config.local.json' : 'config/config.json');
     var config = rawConfig.toString();
     for (key in process.env) {
+        if (!process.env.hasOwnProperty(key)) {
+            continue;
+        }
         var re = new RegExp('\\$\\{' + key + '\\}', 'g');
         config = config.replace(re, process.env[key]);
     }
-    return JSON.parse(config);;
+    return JSON.parse(config);
 }
 
 // Simple route middleware to ensure user is authenticated.
@@ -182,64 +217,111 @@ function ensureAuthenticated(req, res, next) {
         return next();
     }
     res.status(401);
-    res.statusMessage='The user has no authentication information';
+    res.statusMessage = 'The user has no authentication information';
     res.end();
 }
 
-function getFileInfo (fileId, retval, next) {
+function uploadFile(fileName, rawmap, callback) {
+    var form = new FormData();
+    form.append('fileName', fileName);
+    form.append('file', JSON.stringify(rawmap));
+    form.submit(
+        {
+            host: options.storage.host,
+            port: options.storage.port,
+            path: '/file/upload',
+            headers: {mindweb_user: JSON.stringify(user)}
+        },
+        function (err, res) {
+            if (err) {
+                callback({statusCode: 500, message: err})
+            } else if (res.statusCode == 200) {
+                callback();
+            } else {
+                callback({statusCode: res.statusCode, message: res.statusMessage})
+            }
+        }
+    );
+}
+
+function getFileInfo(fileId, retval, next) {
     // TODO: Fetch core file information from storage service
     var req_options = {
         method: 'GET',
         host: options.storage.host,
         port: options.storage.port,
-        path: '/file/info/'+fileId,
+        path: '/file/info/' + fileId,
         headers: {mindweb_user: JSON.stringify(user)}
     };
     var chunks = [];
-    var req = http.request(req_options, function(rightResponse) {
+    var req = http.request(req_options, function (rightResponse) {
         rightResponse.on('data', function (chunk) {
             chunks.push(chunk)
         });
         rightResponse.on('end', function () {
-            if (rightResponse.statusCode==200){
-                retval.result =  JSON.parse(Buffer.concat(chunks));
+            if (rightResponse.statusCode == 200) {
+                retval.result = JSON.parse(Buffer.concat(chunks));
                 next();
             } else {
-                next ({statusCode:rightResponse.statusCode, message:rightResponse.statusMessage})
+                next({statusCode: rightResponse.statusCode, message: rightResponse.statusMessage})
             }
         });
 
     }).on('error', function (error) {
-        completed({statusCode:500, message:error.message})
+        next({statusCode: 500, message: error.message})
     });
     req.end();
 }
 
-function getFileVersion (fileVersionId, retval, completed) {
+function getFileVersion(fileVersionId, retval, completed) {
     var req_options = {
         method: 'GET',
         host: options.storage.host,
         port: options.storage.port,
-        path: '/fileversion/content/'+fileVersionId,
+        path: '/fileversion/content/' + fileVersionId,
         headers: {mindweb_user: JSON.stringify(user)}
     };
     var chunks = [];
-    var req = http.request(req_options, function(rightResponse) {
+    var req = http.request(req_options, function (rightResponse) {
         rightResponse.on('data', function (chunk) {
             chunks.push(chunk)
         });
         rightResponse.on('end', function () {
-            if (rightResponse.statusCode==200){
-                retval.result =  JSON.parse(Buffer.concat(chunks));
+            if (rightResponse.statusCode == 200) {
+                retval.id = fileVersionId;
+                retval.result = JSON.parse(Buffer.concat(chunks));
                 completed();
             } else {
-                completed({statusCode:rightResponse.statusCode, message:rightResponse.statusMessage})
+                completed({statusCode: rightResponse.statusCode, message: rightResponse.statusMessage})
             }
         });
 
     }).on('error', function (error) {
-        completed({statusCode:500, message:error.message})
+        completed({statusCode: 500, message: error.message})
     });
     req.end();
+}
+
+function saveFileVersion(fileVersionId, content, callback) {
+    var form = new FormData();
+    form.append('content', JSON.stringify(content));
+
+    form.submit(
+        {
+            host: options.storage.host,
+            port: options.storage.port,
+            path: '/fileversion/content/' + fileVersionId,
+            headers: {mindweb_user: JSON.stringify(user)}
+        },
+        function (err, res) {
+            if (err) {
+                callback({statusCode: 500, message: err})
+            } else if (res.statusCode == 200) {
+                callback();
+            } else {
+                callback({statusCode: res.statusCode, message: res.statusMessage})
+            }
+        }
+    );
 }
 
