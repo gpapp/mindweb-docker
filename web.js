@@ -121,9 +121,8 @@ app
                 function (next) {
                     var file = retval.result.file;
                     saveFileVersion(fileVersionId, file, next);
-                },
-                function (next) {
-                }],
+                }
+            ],
             function (error) {
                 if (error) {
                     response.statusCode = error.statusCode;
