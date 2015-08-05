@@ -32,6 +32,9 @@ EditorService.applyAction = function (file, action, callback) {
         case 'nodeFold':
             eventNode.open = action.payload;
             break;
+        case 'nodeDetailFold':
+            eventNode.detailOpen = action.payload;
+            break;
         case 'nodeText':
             eventNode.nodeMarkdown = action.payload;
             break;
