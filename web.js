@@ -123,15 +123,15 @@ app
                     saveFileVersion(fileVersionId, file, next);
                 },
                 function (next) {
-                    response.statusCode = 200;
-                    response.end();
                 }],
             function (error) {
                 if (error) {
                     response.statusCode = error.statusCode;
                     response.write(error.message);
-                    response.end();
+                } else {
+                    response.statusCode = 200;
                 }
+                response.end();
             }
         )
     })
