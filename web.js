@@ -195,7 +195,7 @@ app.listen(options.port, function () {
 function processConfig() {
     var rawConfig = fs.readFileSync(process.env['development'] ? 'config/config.local.json' : 'config/config.json');
     var config = rawConfig.toString();
-    for (key in process.env) {
+    for (var key in process.env) {
         if (!process.env.hasOwnProperty(key)) {
             continue;
         }

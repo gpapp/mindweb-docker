@@ -1,5 +1,3 @@
-var parseString = require('xml2js').parseString;
-
 module.exports = EditorService;
 
 function EditorService() {
@@ -13,7 +11,10 @@ function findNodeById(node, nodeId) {
     if (!node.node) {
         return null;
     }
-    for (index in node.node) {
+    for (var index in node.node) {
+        if (!node.node.hasOwnProperty(index)) {
+            continue;
+        }
         var found = findNodeById(node.node[index], nodeId);
         if (found) {
             return found;
