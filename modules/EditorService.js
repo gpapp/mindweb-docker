@@ -50,12 +50,15 @@ EditorService.applyAction = function (file, action, callback) {
             break;
         case 'newNode':
             // TODO: sanitize node, add proper ids
-            eventNode.node.append(action.payload);
+            if (!eventNode.node) {
+                eventNode.node = [];
+            }
+            eventNode.node.push(action.payload);
             break;
         case 'deleteNode':
+            delete eventNode;
         default:
-            callback('Unimplemented event:' + action.event);
-            break;
+            return callback('Unimplemented event: ' + action.event);
     }
     callback();
 };

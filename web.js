@@ -113,6 +113,9 @@ app
                             EditorService.applyAction(file, action, callback);
                         },
                         function (error) {
+                            if(error) {
+                                console.error("Error applying action: "+error);
+                            }
                             retval.result.file = file;
                             next();
                         }

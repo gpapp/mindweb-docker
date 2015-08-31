@@ -9,12 +9,12 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "async": "~1.2.x",
+    "async": "~1.4.x",
     "body-parser": "^1.13.3",
-    "express": "~4.1.x",
+    "express": "~4.13.x",
     "form-data": "0.x.x",
-    "jade": "~1.9.2",
-    "morgan": "~1.5.x",
+    "jade": "~1.11.0",
+    "morgan": "~1.6.x",
     "multer": "~1.0.1",
     "xml2js": "^0.4.9"
   }
