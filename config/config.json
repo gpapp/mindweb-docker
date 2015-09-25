@@ -1,7 +1,0 @@
-{
-  "port": "2003",
-  "storage": {
-    "host": "${STORAGE_PORT_2001_TCP_ADDR}",
-    "port": "${STORAGE_PORT_2001_TCP_PORT}"
-  }
-}
