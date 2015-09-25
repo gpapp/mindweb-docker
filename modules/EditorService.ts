@@ -1,6 +1,10 @@
-var EditorService;
-(function (EditorService) {
-    function findNodeById(node, nodeId) {
+///<reference path='../typings/tsd.d.ts' />
+import EditAction = require("../classes/EditAction")
+import FileContent = require("../classes/FileContent")
+
+module EditorService {
+
+    export function findNodeById(node, nodeId) {
         if (node.$['ID'] === nodeId) {
             return node;
         }
@@ -18,8 +22,8 @@ var EditorService;
         }
         return null;
     }
-    EditorService.findNodeById = findNodeById;
-    function applyAction(file, action, callback) {
+
+    export function applyAction(file:FileContent, action:EditAction, callback) {
         var eventNode = this.findNodeById(file.map.node[0], action.parent);
         if (!eventNode) {
             callback('Cannot find root node with id:' + action.parent);
@@ -59,7 +63,5 @@ var EditorService;
         }
         callback();
     }
-    EditorService.applyAction = applyAction;
-})(EditorService || (EditorService = {}));
-module.exports = EditorService;
-//# sourceMappingURL=EditorService.js.map
+}
+export = EditorService;

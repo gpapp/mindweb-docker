@@ -1,4 +1,4 @@
 block content
-    h1= message
+    h1= error.name
+    p= error.statusCode + " - " + error.message
 
-    pre #{error.stack}

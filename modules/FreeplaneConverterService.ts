@@ -1,24 +1,24 @@
 ///<reference path='../typings/tsd.d.ts' />
 var parseString = require('xml2js').parseString;
-var FreeplaneConverterService;
-(function (FreeplaneConverterService) {
+
+module FreeplaneConverterService {
     var urlPattern = /(^|[\s\n]|<br\/?>)((?:https?|ftp):\/\/[\-A-Z0-9+\u0026\u2019@#\/%?=()~_|!:,.;]*[\-A-Z0-9+\u0026@#\/%=~()_|])/gi;
-    function convert(buffer, callback) {
+
+    export function convert(buffer:Buffer, callback) {
         // XML to JSON
-        parseString(buffer.toString(), { trim: true }, function (err, result) {
+        parseString(buffer.toString(), {trim: true}, function (err, result) {
             if (err) {
                 return callback(err);
             }
             try {
                 buildMarkdownContent(result.map);
-            }
-            catch (e) {
+            } catch (e) {
                 return callback(e);
             }
             callback(null, result.map);
-        });
+        })
     }
-    FreeplaneConverterService.convert = convert;
+
     function buildMarkdownContent(node) {
         if (node.$ && node.$['TEXT']) {
             node.nodeMarkdown = node.$['TEXT'];
@@ -49,17 +49,17 @@ var FreeplaneConverterService;
                 continue;
             }
             if (attr === 'nodeMarkdown' || attr === 'detailMarkdown' || attr === 'noteMarkdown' || attr === 'richcontent') {
-            }
-            else if (Array.isArray(node[attr])) {
+
+            } else if (Array.isArray(node[attr])) {
                 for (var i = 0, len = node[attr].length; i < len; i++) {
                     buildMarkdownContent(node[attr][i]);
                 }
-            }
-            else {
+            } else {
                 console.log('Unknown attribute: ' + attr);
             }
         }
     }
+
     function buildMarkdownContentForNode(node, listType, listPrefix) {
         var retval = '';
         for (var n in node) {
@@ -122,8 +122,7 @@ var FreeplaneConverterService;
                 // insert nodes
                 if (typeof node[n][i] != 'object') {
                     retval += node[n][i].trim().replace(urlPattern, '$1[$2]($2)');
-                }
-                else {
+                } else {
                     if (node._) {
                         retval += node._.trim().replace(urlPattern, '$1[$2]($2)') + '\n';
                     }
@@ -171,6 +170,6 @@ var FreeplaneConverterService;
         }
         return retval;
     }
-})(FreeplaneConverterService || (FreeplaneConverterService = {}));
-module.exports = FreeplaneConverterService;
-//# sourceMappingURL=FreeplaneConverterService.js.map
+}
+
+export = FreeplaneConverterService;
