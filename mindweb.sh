@@ -114,14 +114,17 @@ Valid build parameters are:
     -i|--interactive: Use interactive shell
     -t|--type:   Type of build (defaults to dev)
     -b|--broker-port: The port for the broker to listen to (defaults to 8081)
+    -dp|--db-port: The port for the db to listen to (defaults to 9042)
     -m|--module: build specific module only (shortcuts from interactive shell)
 EOT
 }
 
 TYPE='DEV'
 BROKER_PORT='8081'
+DB_PORT='9042'
 export TYPE
 export BROKER_PORT
+export DB_PORT
 
 if [[ $# == 0 ]]; then
   help
@@ -196,6 +199,10 @@ while [[ $# > 0 ]]; do
 	;;
 	-b|--broker-port)
 	    BROKER_PORT="$2"
+	    shift
+	;;
+	-dp|--db-port)
+	    DB_PORT="$2"
 	    shift
 	;;
 	-m|--module)

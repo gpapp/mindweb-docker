@@ -4,6 +4,7 @@ USER root
 RUN npm cache clean -fI
 RUN npm install -g n
 RUN n stable
+RUN npm install -g bower
 
 RUN apt-get update
 RUN apt-get install apt-utils -y

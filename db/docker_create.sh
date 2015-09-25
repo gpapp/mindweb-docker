@@ -1,7 +1,7 @@
 #!/bin/bash
 ## This snippet is used by the build script to create container specific to the project
 
-docker create -P --name mw-db-$TYPE mindweb/db
+docker create -P -p 0.0.0.0:$DB_PORT:9042 --name mw-db-$TYPE mindweb/db
 
 exit
 echo "Starting db and trying to connect to it"
