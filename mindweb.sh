@@ -94,8 +94,30 @@ function resolve_module () {
     esac
     return 0
 }
+
+function checkRegistry {
+	docker stop mw-registry
+	docker rm mw-registry
+#	docker rmi -f mindweb/registry
+#	docker build -t mindweb/registry registry
+#	docker create -P -p 0.0.0.0:8001:4001 -p 0.0.0.0:8002:7001 --name mw-registry mindweb/registry
+#	docker start mw-registry
+	HostIP=192.168.1.20
+	docker run -d -v /usr/share/ca-certificates/:/etc/ssl/certs -p 2380:2380 -p 2379:2379 \
+	 --name mw-registry quay.io/coreos/etcd:v2.2.0 \
+	 -name etcd0 \
+	 -advertise-client-urls http://${HostIP}:2379 \
+	 -listen-client-urls http://0.0.0.0:2379 \
+	 -initial-advertise-peer-urls http://${HostIP}:2380 \
+	 -listen-peer-urls http://0.0.0.0:2380 \
+	 -initial-cluster-token etcd-cluster-1 \
+	 -initial-cluster etcd0=http://${HostIP}:2380 \
+	 -initial-cluster-state new \
+	 -debug
+}
+
 function help() {
-    echo <<EOF
+    echo "
 Usage mindweb.sh <command> <options>
     Valid commands are:
     start - start all containers
@@ -104,19 +126,18 @@ Usage mindweb.sh <command> <options>
     build - build modules
     init-docker - initialize docker repository
     init-db - intitialize database
-EOF
+    help - this help"
 }
 
 function help_build () {
-    echo -e <<EOT
+    echo -e "
 Valid build parameters are:
     -a|--all: force everything
     -i|--interactive: Use interactive shell
     -t|--type:   Type of build (defaults to dev)
     -b|--broker-port: The port for the broker to listen to (defaults to 8081)
     -dp|--db-port: The port for the db to listen to (defaults to 9042)
-    -m|--module: build specific module only (shortcuts from interactive shell)
-EOT
+    -m|--module: build specific module only (shortcuts from interactive shell)"
 }
 
 TYPE='DEV'
@@ -164,6 +185,7 @@ case $CMD in
 	docker build -t mindweb/nodejs-base nodejs-base 
 	docker rmi -f mindweb/webserver-base
 	docker build -t mindweb/webserver-base webserver-base
+	checkRegistry
 	exit
     ;;
     init-db)
@@ -178,6 +200,7 @@ case $CMD in
 	;;
     *)
 	help
+	exit
 esac
 while [[ $# > 0 ]]; do
     key="$1"
