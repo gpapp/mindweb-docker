@@ -2,6 +2,7 @@
 ## This snippet is used by the build script to create container specific to the project
 
 docker create -P -p 0.0.0.0:$DB_PORT:9042 --name mw-db-$TYPE mindweb/db \
+    --env DB_PORT=${DB_PORT}
     --env TYPE=${TYPE}
 
 exit

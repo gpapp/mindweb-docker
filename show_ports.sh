@@ -1,7 +1,6 @@
 #!/bin/bash
 function showType {
 TYPE=$1
-echo "DB:$(docker port mw-db-${TYPE} |grep 9042)"
 echo "Ports for $TYPE"
 echo "DB:$(docker port mw-db-${TYPE} |grep 9042)"
 echo "SESSION:$(docker port mw-session-manager-${TYPE} | grep 2000)"

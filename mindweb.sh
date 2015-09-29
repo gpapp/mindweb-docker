@@ -51,7 +51,7 @@ function findDependents () {
 function rebuildComponent () {
         NAME=$1
 
-        git submodule foreach pull
+        git submodule foreach git pull
 	docker build -t mindweb/$NAME $NAME
 }
 
