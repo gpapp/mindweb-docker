@@ -1,6 +1,6 @@
 #!/bin/bash
 function showType {
-
+TYPE=$1
 echo "DB:$(docker port mw-db-${TYPE} |grep 9042)"
 echo "Ports for $TYPE"
 echo "DB:$(docker port mw-db-${TYPE} |grep 9042)"
@@ -16,3 +16,4 @@ TYPE=$1
 if [ -z "$TYPE" ]; then
   TYPE='DEV'
 fi
+showType $TYPE

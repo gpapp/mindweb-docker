@@ -51,13 +51,7 @@ function findDependents () {
 function rebuildComponent () {
         NAME=$1
 
-	if [ ! -d $NAME ]; then 
-	  git clone ssh://git@dev.itworks.hu:2022/MindWeb/$NAME.git
-        else
-          cd $NAME
-          git pull
-          cd ..
-        fi
+        git submodule foreach pull
 	docker build -t mindweb/$NAME $NAME
 }
 

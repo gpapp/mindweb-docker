@@ -1,15 +1,15 @@
 [submodule "broker"]
 	path = broker
-	url = ssh://dev.itworks.hu:2022/MindWeb/broker
+	url = ssh://git@dev.itworks.hu:2022/MindWeb/broker.git
 [submodule "ui"]
 	path = ui
-	url = ssh://dev.itworks.hu:2022/MindWeb/ui
-[submodule "storage"]
-	path = storage
-	url = ssh://dev.itworks.hu:2022/MindWeb/storage
-[submodule "session-manager"]
-	path = session-manager
-	url = ssh://dev.itworks.hu:2022/MindWeb/session-manager
+	url = ssh://git@dev.itworks.hu:2022/MindWeb/ui.git
 [submodule "file"]
 	path = file
-	url = ssh://dev.itworks.hu:2022/MindWeb/file
+	url = ssh://git@dev.itworks.hu:2022/MindWeb/file.git
+[submodule "storage"]
+	path = storage
+	url = ssh://git@dev.itworks.hu:2022/MindWeb/storage.git
+[submodule "session-manager"]
+	path = session-manager
+	url = ssh://git@dev.itworks.hu:2022/MindWeb/session-manager.git
