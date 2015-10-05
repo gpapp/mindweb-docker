@@ -5,7 +5,7 @@ function rebuildComponent () {
         NAME=$1
 
 	cd $NAME
-        git pull $NAME
+        git pull
 	cd -
 	docker build -t mindweb/$NAME $NAME
 }
