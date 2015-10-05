@@ -13,7 +13,7 @@ ONBUILD ADD . /home/node
 ONBUILD RUN chown -R node /home/node
 ONBUILD USER node
 ONBUILD RUN npm install
-ONBUILD RUN find . -name "*.ts" | xargs tsc -m commonjs -t ES5 --sourceMap; exit 0
+#ONBUILD RUN find . -name "*.ts" | xargs tsc -m commonjs -t ES5 --sourceMap; exit 0
 
 CMD []
 ENTRYPOINT ["/nodejs/bin/npm", "start"]

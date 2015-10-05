@@ -1,57 +1,12 @@
 #!/bin/bash
-COMPONENTS='storage session-manager file ui broker'
-
-function checkForUpdate () {
-	NAME=$1
-	if [ ! -d $NAME ]; then 
-	    RETVAL=1;
-        else
-	    cd $NAME
-	    git remote update >/dev/null
-	    if `git status -uall |grep 'nothing to commit' >/dev/null`; then
-		LOCAL=$(git rev-parse @)
-		REMOTE=$(git rev-parse origin/master)
-		BASE=$(git merge-base @ origin/master)
-
-		if [ $LOCAL = $REMOTE ]; then
-		    RETVAL=0;
-		elif [ $LOCAL = $BASE ]; then
-		    RETVAL=1;
-		elif [ $REMOTE = $BASE ]; then
-		    RETVAL=2;
-		else
-		    RETVAL=3;
-		fi
-	    else
-		RETVAL=2;
-	    fi
-	    cd ..
-	fi
-	return $RETVAL
-}
-
-function findDependents () {
-	local C=$1
-	for i in $COMPONENTS; do 
-		if [[ $C != $i ]]; then 
-			for j in $(cat $i/docker_create.sh|sed -nr '/--link/ { s/.*\-\-link mw-(.*)-\$TYPE:.*/\1/; p}'); do
-				if [[ $C == $j ]]; then 
-					echo "$C ==> $i" >&2
-					local LEAFS=$(findDependents "$i")
-			fi
-			done
-		fi
-	done
-	for i in $LEAFS; do
-		LEAFS=$(echo $LEAFS|sed -rn "s/$i//g; s/(.*)/\1 $i/;p")
-	done
-	echo -n "$C $LEAFS"
-}
+COMPONENTS='ui server'
 
 function rebuildComponent () {
         NAME=$1
 
-        git submodule foreach git pull
+	cd $NAME
+        git pull $NAME
+	cd -
 	docker build -t mindweb/$NAME $NAME
 }
 
@@ -66,20 +21,11 @@ function resolve_module () {
     	'd')
     	    echo 'db'
     	;;
-    	'b')
-    	    echo 'broker'
-    	;;
-    	'm')
-    	    echo 'session-manager'
-    	;;
     	'u')
     	    echo 'ui'
     	;;
     	's')
-    	    echo 'storage'
-    	;;
-    	'f')
-    	    echo 'file'
+    	    echo 'server'
     	;;
     	*)
     	    echo -e "\n\nInvalid value selected: $res"
@@ -87,27 +33,6 @@ function resolve_module () {
     	;;
     esac
     return 0
-}
-
-function checkRegistry {
-	docker stop mw-registry
-	docker rm mw-registry
-#	docker rmi -f mindweb/registry
-#	docker build -t mindweb/registry registry
-#	docker create -P -p 0.0.0.0:8001:4001 -p 0.0.0.0:8002:7001 --name mw-registry mindweb/registry
-#	docker start mw-registry
-	HostIP=192.168.1.20
-	docker run -d -v /usr/share/ca-certificates/:/etc/ssl/certs -p 2380:2380 -p 2379:2379 \
-	 --name mw-registry quay.io/coreos/etcd:v2.2.0 \
-	 -name etcd0 \
-	 -advertise-client-urls http://${HostIP}:2379 \
-	 -listen-client-urls http://0.0.0.0:2379 \
-	 -initial-advertise-peer-urls http://${HostIP}:2380 \
-	 -listen-peer-urls http://0.0.0.0:2380 \
-	 -initial-cluster-token etcd-cluster-1 \
-	 -initial-cluster etcd0=http://${HostIP}:2380 \
-	 -initial-cluster-state new \
-	 -debug
 }
 
 function help() {
@@ -129,17 +54,16 @@ Valid build parameters are:
     -a|--all: force everything
     -i|--interactive: Use interactive shell
     -t|--type:   Type of build (defaults to dev)
-    -b|--broker-port: The port for the broker to listen to (defaults to 8081)
+    -hp|--http-port: The port for the server to listen to (defaults to 8082)
+    -sp|--server-port: The port for the server to listen to (defaults to 8083)
     -dp|--db-port: The port for the db to listen to (defaults to 9042)
     -m|--module: build specific module only (shortcuts from interactive shell)"
 }
 
-TYPE='DEV'
-BROKER_PORT='8081'
-DB_PORT='9042'
-export TYPE
-export BROKER_PORT
-export DB_PORT
+export TYPE='DEV'
+export HTTP_PORT='8082'
+export SERVER_PORT='8083'
+export DB_PORT='9042'
 
 if [[ $# == 0 ]]; then
   help
@@ -179,7 +103,6 @@ case $CMD in
 	docker build -t mindweb/nodejs-base nodejs-base 
 	docker rmi -f mindweb/webserver-base
 	docker build -t mindweb/webserver-base webserver-base
-	checkRegistry
 	exit
     ;;
     init-db)
@@ -214,8 +137,12 @@ while [[ $# > 0 ]]; do
 	    TYPE="$2"
 	    shift
 	;;
-	-b|--broker-port)
-	    BROKER_PORT="$2"
+	-hp|--http-port)
+	    HTTP_PORT="$2"
+	    shift
+	;;
+	-sp|--server-port)
+	    SERVER_PORT="$2"
 	    shift
 	;;
 	-dp|--db-port)
@@ -268,13 +195,10 @@ fi
 if [ $INTERACTIVE ]; then
     echo 'What should I rebuild?'
     echo -e '\tA - All modules'
-    echo -e '\tb - Broker'
     echo -e '\td - db'
-    echo -e '\tm - session-manager'
     echo -e '\tu - UI'
-    echo -e '\ts - storage service (MISSING)'
-    echo -e '\tf - converter service (MISSING)'
-    read -N1 -p '(Abdmsf)' res
+    echo -e '\ts - server component'
+    read -N1 -p '(Adus)' res
     echo -e '\n'
 
     PUSH=$(resolve_module $res)
@@ -297,14 +221,7 @@ if [ -n "${PUSH}${MERGE}" ] && [[ $BUILD == 1 ]]; then
     esac
 fi
 
-DEP_CHAIN=""
-for i in $MODIFIED; do
-	DEP_CHAIN="$DEP_CHAIN $(findDependents $i)"
-done
-for i in $DEP_CHAIN; do
-	DEP_CHAIN=$(echo $DEP_CHAIN|sed -rn "s/$i//g; s/(.*)/\1 $i/;p")
-done
-echo "Dependencies:"$DEP_CHAIN
+DEP_CHAIN=$MODIFIED
 
 # Stop all dependents
 if [[ $STOP == 1 ]]; then
@@ -344,5 +261,3 @@ UNTAGED=$(docker images|awk '{if (/^<none>/) {print $3}}')
 if [ -n "$UNTAGED" ]; then
     docker rmi $UNTAGED
 fi
-
-./show_ports.sh $TYPE

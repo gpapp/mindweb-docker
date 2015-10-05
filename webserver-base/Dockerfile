@@ -11,5 +11,5 @@ RUN mkdir /var/www/
 RUN chown -R www-data /var/log/nginx
 
 ONBUILD USER www-data
-WORKDIR /var/www/
-
+ONBUILD EXPOSE 80 5672
+ONBUILD WORKDIR /var/www/
