@@ -3,4 +3,4 @@
 	url = ssh://git@dev.itworks.hu:2022/MindWeb/ui.git
 [submodule "server"]
 	path = server
-	url = ssh://dev.itworks.hu:2022/MindWeb/server.git
+	url = ssh://git@dev.itworks.hu:2022/MindWeb/server.git
