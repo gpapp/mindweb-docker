@@ -3,8 +3,9 @@ COMPONENTS='ui server'
 
 function rebuildComponent () {
         NAME=$1
-	git submodule sync
-	git submodule update
+	cd $NAME
+	git pull
+	cd -
 	docker build -t mindweb/$NAME $NAME
 }
 
