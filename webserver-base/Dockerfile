@@ -1,13 +1,12 @@
-From google/nodejs:latest
+From node:latest
 
 USER root
-RUN npm cache clean -fI; npm install -g n; n stable; npm install -g bower
+RUN npm cache clean -fI; npm install -g bower
 
 RUN apt-get update; apt-get install apt-utils nginx -y;apt-get clean
 RUN echo "daemon off;" >> /etc/nginx/nginx.conf
 RUN sed -i 's+root .*$+root /var/www/;+; s+try_files \$uri \$uri/ /index.html;+try_files \$uri \$uri/ \= 404;+' /etc/nginx/sites-enabled/default 
 
-RUN mkdir /var/www/
 RUN chown -R www-data /var/log/nginx
 
 ONBUILD USER www-data
