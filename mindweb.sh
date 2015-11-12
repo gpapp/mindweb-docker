@@ -1,6 +1,35 @@
 #!/bin/bash
 COMPONENTS='ui server'
 
+function checkForUpdate () {
+	NAME=$1
+	if [ ! -d $NAME ]; then 
+	    RETVAL=1;
+        else
+	    cd $NAME
+	    git remote update >/dev/null
+	    if `git status -uall |grep 'nothing to commit' >/dev/null`; then
+		LOCAL=$(git rev-parse @)
+		REMOTE=$(git rev-parse origin/master)
+		BASE=$(git merge-base @ origin/master)
+
+		if [ $LOCAL = $REMOTE ]; then
+		    RETVAL=0;
+		elif [ $LOCAL = $BASE ]; then
+		    RETVAL=1;
+		elif [ $REMOTE = $BASE ]; then
+		    RETVAL=2;
+		else
+		    RETVAL=3;
+		fi
+	    else
+		RETVAL=2;
+	    fi
+	    cd ..
+	fi
+	return $RETVAL
+}
+
 function rebuildComponent () {
         NAME=$1
 	cd $NAME
@@ -51,12 +80,12 @@ function help_build () {
     echo -e "
 Valid build parameters are:
     -a|--all: force everything
-    -i|--interactive: Use interactive shell
-    -t|--type:   Type of build (defaults to dev)
+    -t|--type:   Type of build (defaults to DEV)
     -hp|--http-port: The port for the server to listen to (defaults to 8082)
     -sp|--server-port: The port for the server to listen to (defaults to 8083)
     -dp|--db-port: The port for the db to listen to (defaults to 9042)
-    -m|--module: build specific module only (shortcuts from interactive shell)"
+    -m|--module: build specific module only (shortcuts from interactive shell)
+    -f: force rebuild"
 }
 
 export TYPE='DEV'
@@ -127,13 +156,12 @@ while [[ $# > 0 ]]; do
 	    MANUAL=1
 	    PUSH=$COMPONENTS
 	;;
-	-i|--interactive)
-	    echo "Entering interactive mode"
-	    MANUAL=1
-	    INTERACTIVE=1
-	;;
 	-t|--type)
 	    TYPE="$2"
+	    shift
+	;;
+	-f)
+	    FORCE=1
 	    shift
 	;;
 	-hp|--http-port)
@@ -191,25 +219,14 @@ if [ ! $MANUAL ]; then
     if [ -n "$MERGE" ]; then echo "These projects need merge: $MERGE"; fi
     REBUILD=$PULL
 fi
-if [ $INTERACTIVE ]; then
-    echo 'What should I rebuild?'
-    echo -e '\tA - All modules'
-    echo -e '\td - db'
-    echo -e '\tu - UI'
-    echo -e '\ts - server component'
-    read -N1 -p '(Adus)' res
-    echo -e '\n'
-
-    PUSH=$(resolve_module $res)
-    if [[ $? == 1 ]]; then
-        echo $PUSH
-        exit
-    fi 
-fi
 
 MODIFIED="${PULL} ${PUSH} ${MERGE}"
 
 if [ -n "${PUSH}${MERGE}" ] && [[ $BUILD == 1 ]]; then
+
+  if [[ $FORCE == 1 ]]; then
+    REBUILD=$MODIFIED
+  else
     echo "Building modules: ${PUSH}${MERGE}"
     read -N1 -p 'Force rebuild? (yN)' res
     echo -e '\n'
@@ -218,42 +235,60 @@ if [ -n "${PUSH}${MERGE}" ] && [[ $BUILD == 1 ]]; then
     	'y') REBUILD=$MODIFIED ;;
     	*)   REBUILD=''; ;;
     esac
+  fi
 fi
 
 DEP_CHAIN=$MODIFIED
 
-# Stop all dependents
-if [[ $STOP == 1 ]]; then
-    for i in $DEP_CHAIN; do
-	echo "Stopping container:" $i
-	docker stop mw-$i-$TYPE >/dev/null
-    done
-fi
-
 if [[ $BUILD == 1 ]]; then
-    for i in $DEP_CHAIN; do
-	echo "Removing container:" $i
-	docker rm mw-$i-$TYPE >/dev/null
-    done
     # Rebuild components if needed
     for i in $REBUILD; do rebuildComponent $i;  done
 
     # Perform container specific creation
     for i in $DEP_CHAIN; do
-	echo Creating container $i
+	echo "Creating container $i"
 	cd $i
-	./docker_create.sh >/dev/null
+	docker rm mw-$i-$TYPE-tmp >/dev/null
+	./docker_create.sh mw-${i}-${TYPE}-tmp >/dev/null
         cd -
     done
 fi
 
-if [[ $START == 1 ]]; then
-    # Start all components
-    for i in $DEP_CHAIN; do
-	    echo "Starting container:" $i
-	    docker start mw-$i-$TYPE >/dev/null
+    # Check if db runs
+    if [[ $(docker ps|grep mw-db-${TYPE}) ]]; then 
+      docker start mw-db-${TYPE}
+    fi
+    # Wait for DB to accept connections
+    i=0
+    while [[ $i < 5 ]]; do
+      if [[ `docker run -it --link mw-db-$TYPE:cassandra --rm cassandra sh -c 'exec cqlsh "$CASSANDRA_PORT_9042_TCP_ADDR" -e "describe keyspace mindweb"'` ]]; then
+	break;
+      fi
+      i=$(( $i + 1 ))
+      echo "Database is not available, sleeping for $i seconds"
+      sleep $i
     done
-fi
+    if [[ $i == 5 ]]; then
+	echo "Could not connect to databese" >&2
+	exit 1;
+    fi
+
+# Stop all dependents
+for i in $DEP_CHAIN; do
+    if [[ $STOP == 1 ]]; then
+	echo "Stopping container:" $i
+	docker stop mw-$i-$TYPE >/dev/null
+	if [[ $BUILD == 1 ]]; then
+	    echo "Replacing container:" $i
+	    docker rm mw-$i-$TYPE >/dev/null
+	    docker rename mw-$i-$TYPE-tmp  mw-$i-$TYPE >/dev/null
+	fi
+    fi
+    if [[ $START == 1 ]]; then
+	echo "Starting container:" $i
+	docker start mw-$i-$TYPE >/dev/null
+    fi
+done
 
 echo "Cleaning up untaged images"
 UNTAGED=$(docker images|awk '{if (/^<none>/) {print $3}}')
