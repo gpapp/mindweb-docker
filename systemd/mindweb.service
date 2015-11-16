@@ -1,0 +1,11 @@
+[Unit]
+Description=Mindweb
+After=network.target
+
+[Service]
+ExecStart=/home/gpapp/mindweb/mindweb.sh start -t LIVE
+ExecStop=/home/gpapp/mindweb/mindweb.sh stop -t LIVE
+User=gpapp
+
+[Install]
+WantedBy=default.target

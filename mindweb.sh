@@ -89,9 +89,6 @@ Valid build parameters are:
 }
 
 export TYPE='DEV'
-export HTTP_PORT='8082'
-export SERVER_PORT='8083'
-export DB_PORT='9042'
 
 if [[ $# == 0 ]]; then
   help
@@ -194,6 +191,33 @@ while [[ $# > 0 ]]; do
     shift # past argument or value
 done
 
+if [[ -z "$HTTP_PORT" ]]; then
+    if [[ $TYPE = "DEV" ]]; then
+       export HTTP_PORT='8082'
+    elif [[ $TYPE = "LIVE" ]]; then
+       export HTTP_PORT='8080'
+    else
+       echo "Unknown type ${TYPE} specified and HTTP_PORT not set"
+    fi
+fi
+if [[ -z "$SERVER_PORT" ]]; then
+    if [[ $TYPE = "DEV" ]]; then
+       export SERVER_PORT='8083'
+    elif [[ $TYPE = "LIVE" ]]; then
+       export SERVER_PORT='8081'
+    else
+       echo "Unknown type ${TYPE} specified and SERVER_PORT not set"
+    fi
+fi
+if [[ -z "$DB_PORT" ]]; then
+    if [[ $TYPE = "DEV" ]]; then
+       export DB_PORT='9042'
+    elif [[ $TYPE = "LIVE" ]]; then
+       export DB_PORT='19042'
+    else
+       echo "Unknown type ${TYPE} specified and DB_PORT not set"
+    fi
+fi
 
 if [ ! $MANUAL ]; then 
     for i in $COMPONENTS; do
@@ -248,27 +272,33 @@ if [[ $BUILD == 1 ]]; then
     for i in $DEP_CHAIN; do
 	echo "Creating container $i"
 	cd $i
-	docker rm mw-$i-$TYPE-tmp >/dev/null
+    	if [[ $(docker ps -a|grep mw-$i-${TYPE}-tmp) ]]; then 
+	    docker rm mw-$i-$TYPE-tmp >/dev/null
+        fi
 	./docker_create.sh mw-${i}-${TYPE}-tmp >/dev/null
         cd -
     done
 fi
 
     # Check if db runs
-    if [[ $(docker ps|grep mw-db-${TYPE}) ]]; then 
+    if [[ ! $(docker ps|grep mw-db-${TYPE}) ]]; then 
+      echo "Starting db for $TYPE"
       docker start mw-db-${TYPE}
+      sleep 16
     fi
     # Wait for DB to accept connections
-    i=0
-    while [[ $i < 5 ]]; do
-      if [[ `docker run -it --link mw-db-$TYPE:cassandra --rm cassandra sh -c 'exec cqlsh "$CASSANDRA_PORT_9042_TCP_ADDR" -e "describe keyspace mindweb"'` ]]; then
+    i=1
+    while (( $i < 32 )); do
+      if [[ `docker run -t --link mw-db-$TYPE:cassandra --rm cassandra sh -c 'exec cqlsh "$CASSANDRA_PORT_9042_TCP_ADDR" -e "describe keyspace mindweb"'|grep "CREATE TABLE mindweb.user "` ]]; then
+        echo "DB connection validated"
+        CAN_START=1;
 	break;
       fi
-      i=$(( $i + 1 ))
+      i=$(( $i * 2 ))
       echo "Database is not available, sleeping for $i seconds"
       sleep $i
     done
-    if [[ $i == 5 ]]; then
+    if [[ ! $CAN_START ]]; then
 	echo "Could not connect to databese" >&2
 	exit 1;
     fi
