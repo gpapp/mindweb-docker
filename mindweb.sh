@@ -325,3 +325,4 @@ UNTAGED=$(docker images|awk '{if (/^<none>/) {print $3}}')
 if [ -n "$UNTAGED" ]; then
     docker rmi $UNTAGED
 fi
+exit 0

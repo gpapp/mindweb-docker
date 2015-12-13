@@ -3,9 +3,11 @@ Description=Mindweb
 After=network.target
 
 [Service]
+WorkingDirectory=/home/gpapp/mindweb
 ExecStart=/home/gpapp/mindweb/mindweb.sh start -t LIVE
 ExecStop=/home/gpapp/mindweb/mindweb.sh stop -t LIVE
 User=gpapp
+RemainAfterExit=true
 
 [Install]
 WantedBy=default.target
