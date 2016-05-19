@@ -80,6 +80,7 @@ function help_build () {
     echo -e "
 Valid build parameters are:
     -a|--all: force everything
+    -C|--cleanup: clean up after start
     -t|--type:   Type of build (defaults to DEV)
     -hp|--http-port: The port for the server to listen to (defaults to 8082)
     -sp|--server-port: The port for the server to listen to (defaults to 8083)
@@ -101,6 +102,7 @@ shift
 BUILD=0
 START=0
 STOP=0
+CLEANUP=0
 
 case $CMD in
     start)
@@ -144,6 +146,7 @@ case $CMD in
 	help
 	exit
 esac
+
 while [[ $# > 0 ]]; do
     key="$1"
 
@@ -152,6 +155,9 @@ while [[ $# > 0 ]]; do
 	    echo "Forcing to rebuild everything"
 	    MANUAL=1
 	    PUSH=$COMPONENTS
+	;;
+    	-C|--cleanup)
+	   CLEANUP=1
 	;;
 	-t|--type)
 	    TYPE="$2"
@@ -289,7 +295,7 @@ fi
     # Wait for DB to accept connections
     i=1
     while (( $i < 32 )); do
-      if [[ `docker run -t --link mw-db-$TYPE:cassandra --rm cassandra sh -c 'exec cqlsh "$CASSANDRA_PORT_9042_TCP_ADDR" -e "describe keyspace mindweb"'|grep "CREATE TABLE mindweb.user "` ]]; then
+      if [[ `docker run -t --link mw-db-$TYPE:cassandra --rm cassandra sh -c 'exec cqlsh "$CASSANDRA_PORT_9042_TCP_ADDR" -e "describe system"'|grep "CREATE TABLE system.batchlog "` ]]; then
         echo "DB connection validated"
         CAN_START=1;
 	break;
@@ -309,9 +315,11 @@ for i in $DEP_CHAIN; do
 	echo "Stopping container:" $i
 	docker stop mw-$i-$TYPE >/dev/null
 	if [[ $BUILD == 1 ]]; then
-	    echo "Replacing container:" $i
-	    docker rm mw-$i-$TYPE >/dev/null
-	    docker rename mw-$i-$TYPE-tmp  mw-$i-$TYPE >/dev/null
+	    if [[ ! $i == "db" ]]; then
+		echo "Replacing container:" $i
+		docker rm mw-$i-$TYPE >/dev/null
+		docker rename mw-$i-$TYPE-tmp  mw-$i-$TYPE >/dev/null
+	    fi
 	fi
     fi
     if [[ $START == 1 ]]; then
@@ -320,9 +328,11 @@ for i in $DEP_CHAIN; do
     fi
 done
 
-echo "Cleaning up untaged images"
-UNTAGED=$(docker images|awk '{if (/^<none>/) {print $3}}')
-if [ -n "$UNTAGED" ]; then
+if [[ $CLEANUP == 1 ]]; then
+  echo "Cleaning up untaged images"
+  UNTAGED=$(docker images|awk '{if (/^<none>/) {print $3}}')
+  if [ -n "$UNTAGED" ]; then
     docker rmi $UNTAGED
+  fi
 fi
 exit 0
