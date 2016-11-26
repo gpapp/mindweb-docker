@@ -6,15 +6,16 @@ NAME=mw-db-$TYPE
 
 docker create \
     -P -p 0.0.0.0:$DB_PORT:9042 \
+    --env CASSANDRA_CLUSTER_NAME="mindweb_${TYPE}_cluster" \
     --env DB_PORT=${DB_PORT} \
     --env TYPE=${TYPE} \
-    --volume `pwd`/../.config/$TYPE/db/data:/var/lib/cassandra/data \
+    --volume `pwd`/../.config/$TYPE/db/lib:/var/lib/cassandra \
     --volume `pwd`/../.config/$TYPE/db/log:/var/log/cassandra \
     --name $NAME \
     mindweb/db
 
 if [ ! -d  ../.config/$TYPE/db/data ]; then 
-  mkdir -p ../.config/$TYPE/db/data
+  mkdir -p ../.config/$TYPE/db/lib
 fi
 
 if [ ! -d  ../.config/$TYPE/db/log ]; then 

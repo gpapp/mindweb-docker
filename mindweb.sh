@@ -294,7 +294,7 @@ fi
     fi
     # Wait for DB to accept connections
     i=1
-    while (( $i < 32 )); do
+    while (( $i < 64 )); do
       if [[ `docker run -t --link mw-db-$TYPE:cassandra --rm cassandra sh -c 'exec cqlsh "$CASSANDRA_PORT_9042_TCP_ADDR" -e "describe system"'|grep "CREATE TABLE system.batchlog "` ]]; then
         echo "DB connection validated"
         CAN_START=1;
@@ -331,8 +331,9 @@ done
 if [[ $CLEANUP == 1 ]]; then
   echo "Cleaning up untaged images"
   UNTAGED=$(docker images|awk '{if (/^<none>/) {print $3}}')
-  if [ -n "$UNTAGED" ]; then
-    docker rmi $UNTAGED
+  DANGLING=$(docker images -f "dangling=true" -q)
+  if [ -n "$UNTAGED$DANGLING" ]; then
+    docker rmi $DANGLING $UNTAGED
   fi
 fi
 exit 0
