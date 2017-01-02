@@ -270,6 +270,24 @@ fi
 
 DEP_CHAIN=$MODIFIED
 
+# Check if kafka runs
+if [[ $STOP == 1 ]]; then
+    if [[ $(docker ps -a|grep mw-kafka-${TYPE}) ]]; then 
+      echo "Stopping kafka for $TYPE"
+      docker stop mw-kafka-$TYPE
+    fi
+else
+    if [[ ! $(docker ps -a|grep mw-kafka-${TYPE}) ]]; then 
+      echo "Creating kafka for $TYPE"
+      $(dirname "$0")/kafka/docker_create.sh
+    fi
+
+    if [[ ! $(docker ps|grep mw-kafka-${TYPE}) ]]; then 
+      echo "Starting kafka for $TYPE"
+      docker start mw-kafka-$TYPE
+    fi
+fi
+
 if [[ $BUILD == 1 ]]; then
     # Rebuild components if needed
     for i in $REBUILD; do rebuildComponent $i;  done
@@ -309,6 +327,8 @@ fi
 	exit 1;
     fi
 
+
+
 # Stop all dependents
 for i in $DEP_CHAIN; do
     if [[ $STOP == 1 ]]; then
@@ -334,6 +354,10 @@ if [[ $CLEANUP == 1 ]]; then
   DANGLING=$(docker images -f "dangling=true" -q)
   if [ -n "$UNTAGED$DANGLING" ]; then
     docker rmi $DANGLING $UNTAGED
+  fi
+  VOLS=$(docker volume ls -qf dangling=true)
+  if [ -n "$VOLS" ]; then
+    docker volume rm $VOLS
   fi
 fi
 exit 0
