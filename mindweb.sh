@@ -179,6 +179,10 @@ while [[ $# > 0 ]]; do
 	    DB_PORT="$2"
 	    shift
 	;;
+	-kp|--kafka-port)
+	    KAFKA_PORT="$2"
+	    shift
+	;;
 	-m|--module)
 	    MANUAL=1
     	    PUSH=$(resolve_module $2)
@@ -222,6 +226,15 @@ if [[ -z "$DB_PORT" ]]; then
        export DB_PORT='19042'
     else
        echo "Unknown type ${TYPE} specified and DB_PORT not set"
+    fi
+fi
+if [[ -z "$KAFKA_PORT" ]]; then
+    if [[ $TYPE = "DEV" ]]; then
+       export KAFKA_PORT='9092'
+    elif [[ $TYPE = "LIVE" ]]; then
+       export KAFKA_PORT='19092'
+    else
+       echo "Unknown type ${TYPE} specified and KAFKA_PORT not set"
     fi
 fi
 
