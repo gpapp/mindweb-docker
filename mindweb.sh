@@ -63,7 +63,7 @@ function resolve_module () {
     return 0
 }
 
-function help() {
+function print_help() {
     echo "
 Usage mindweb.sh <command> <options>
     Valid commands are:
@@ -92,7 +92,7 @@ Valid build parameters are:
 export TYPE='DEV'
 
 if [[ $# == 0 ]]; then
-  help
+  print_help
   exit
 fi
 
@@ -143,7 +143,7 @@ case $CMD in
 	START=1
 	;;
     *)
-	help
+	print_help
 	exit
 esac
 
